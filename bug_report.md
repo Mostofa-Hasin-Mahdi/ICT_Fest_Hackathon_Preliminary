@@ -47,3 +47,11 @@
   In `register`, when a user attempted to register with an existing username inside the same organization, the code checked `if existing is not None:` and returned a dictionary containing the existing user's details with HTTP status `200/201 Created`. This violated Section 5 of `question.md` (`USERNAME TAKEN (409)`), which strictly mandates raising an application error when a username is already taken.
 * **How it was fixed:**
   Changed the block to `if existing is not None: raise AppError(409, "USERNAME_TAKEN", "Username already taken")`.
+
+## Bug 7: Cancellation Notice Refund Tiers & 48h Boundary
+
+* **File(s) / Line(s):** `app/routers/bookings.py`, lines 200-206
+* **What the bug was and why it caused incorrect behavior:**
+  In `cancel_booking`, the notice calculation truncated `notice.total_seconds() // 3600` to an integer (`notice_hours`) and checked `if notice_hours > 48:`. This failed when notice was exactly 48 hours or carried fractional hours (`48.5h` truncated to `48 > 48 == False`), causing qualifying cancellations to receive `50%` instead of `100%`. Furthermore, when notice was under 24 hours, the `else:` block hardcoded `refund_percent = 50`. Both issues violated Business Rule 6 (`question.md` Section 3), which states that cancellations with `notice >= 48 hours` receive a `100%` refund, and those with `notice < 24 hours` receive a `0%` refund.
+* **How it was fixed:**
+  Removed the integer truncation (`notice_hours`) and used exact `timedelta` comparisons: `if notice >= timedelta(hours=48): refund_percent = 100`, followed by `elif notice >= timedelta(hours=24): refund_percent = 50`, and changed the fall-through branch to `else: refund_percent = 0`.
