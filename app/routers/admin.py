@@ -17,11 +17,15 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 @router.get("/usage-report")
 def usage_report(
-    frm: str = Query(..., alias="from"),
-    to: str = Query(...),
+    frm: str | None = Query(None, alias="from"),
+    to: str | None = Query(None),
     db: Session = Depends(get_db),
     admin: User = Depends(require_admin),
 ):
+    if frm is None:
+        frm = (datetime.utcnow().date() - timedelta(days=30)).isoformat()
+    if to is None:
+        to = datetime.utcnow().date().isoformat()
     cached = cache.get_report(admin.org_id, frm, to)
     if cached is not None:
         return cached
