@@ -103,3 +103,11 @@
   In `generate_export`, when an admin requested a CSV export with `include_all=True` alongside a specific `room_id`, the function called `fetch_bookings_raw(db, room_id)`. `fetch_bookings_raw` queried `Booking.room_id == room_id` without joining `Room` or filtering by `Room.org_id == org_id`. This allowed an admin from one organization to pass the `room_id` of a room belonging to a different organization and download all of that room's bookings, violating multi-tenant isolation and Business Rule 10 (`question.md` Section 3).
 * **How it was fixed:**
   Replaced `fetch_bookings_raw(db, room_id)` with `_fetch_scoped(db, org_id, None, room_id)` (`app/services/export.py`), ensuring that `Room` is joined and the `.filter(Room.org_id == org_id)` check is strictly enforced on all exported booking records.
+
+## Bug 14: Race Condition in Reference Code Generation
+
+* **File(s) / Line(s):** `app/services/reference.py`, lines 17-21
+* **What the bug was and why it caused incorrect behavior:**
+  In `next_reference_code`, the function read the counter value (`current = _counter["value"]`), invoked an artificial sleep (`_format_pause()`, `time.sleep(0.12)`), and then incremented and reassigned the counter (`_counter["value"] = current + 1`). Under concurrent load, multiple threads executing `next_reference_code` simultaneously read the exact same `current` value before any thread completed its pause and wrote the incremented value back. Consequently, concurrent booking requests received duplicate reference codes and lost counter increments, violating Business Rule 5 and concurrency consistency requirements (`question.md` Section 3).
+* **How it was fixed:**
+  Imported `threading`, instantiated a module-level mutex `_lock = threading.Lock()`, and wrapped the read-pause-increment cycle inside `next_reference_code` within a `with _lock:` block (`app/services/reference.py`) to ensure atomic, sequential reference code issuance under concurrency.
