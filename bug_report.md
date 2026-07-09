@@ -71,3 +71,11 @@
   In `export.py`, the `EXPORT_HEADER` list defined column names using underscores (`"reference_code"`, `"room_id"`, `"user_id"`, `"start_time"`, `"end_time"`, `"price_cents"`). Section 5 of `question.md` specifically mandates exact space-separated column headers (`Export CSV header (exact): id,reference code,room id,user id, start time, end time,status,price cents`). Using underscores causes automated grading checks and integration tests validating exact CSV header format to fail.
 * **How it was fixed:**
   Replaced all underscored column names in `EXPORT_HEADER` with exact space-separated strings matching the specification (`"reference code"`, `"room id"`, `"user id"`, `"start time"`, `"end time"`, `"price cents"`).
+
+## Bug 10: Broken Token Revocation (`sub` vs `jti`)
+
+* **File(s) / Line(s):** `app/auth.py`, line 97
+* **What the bug was and why it caused incorrect behavior:**
+  In `get_token_payload`, the code checked whether a token was revoked by looking up the user ID (`payload.get("sub")`) inside the `_revoked_tokens` set (`if payload.get("sub") in _revoked_tokens:`). However, `revoke_access_token` correctly stores `payload["jti"]` (the unique token UUID string) inside `_revoked_tokens` upon logout. Because the check compared the user ID (`"sub"`) against a set containing token UUIDs (`"jti"`), it always evaluated to `False`. Consequently, logged-out access tokens were never rejected and could make API requests indefinitely after `POST /auth/logout`, violating Business Rule 8 (`question.md` Section 3).
+* **How it was fixed:**
+  Changed `if payload.get("sub") in _revoked_tokens:` to `if payload.get("jti") in _revoked_tokens:` inside `get_token_payload` (`app/auth.py`).
