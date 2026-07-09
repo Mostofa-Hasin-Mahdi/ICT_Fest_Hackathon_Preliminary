@@ -55,3 +55,11 @@
   In `cancel_booking`, the notice calculation truncated `notice.total_seconds() // 3600` to an integer (`notice_hours`) and checked `if notice_hours > 48:`. This failed when notice was exactly 48 hours or carried fractional hours (`48.5h` truncated to `48 > 48 == False`), causing qualifying cancellations to receive `50%` instead of `100%`. Furthermore, when notice was under 24 hours, the `else:` block hardcoded `refund_percent = 50`. Both issues violated Business Rule 6 (`question.md` Section 3), which states that cancellations with `notice >= 48 hours` receive a `100%` refund, and those with `notice < 24 hours` receive a `0%` refund.
 * **How it was fixed:**
   Removed the integer truncation (`notice_hours`) and used exact `timedelta` comparisons: `if notice >= timedelta(hours=48): refund_percent = 100`, followed by `elif notice >= timedelta(hours=24): refund_percent = 50`, and changed the fall-through branch to `else: refund_percent = 0`.
+
+## Bug 8: Invalid Grace Window
+
+* **File(s) / Line(s):** `app/routers/bookings.py`, line 86
+* **What the bug was and why it caused incorrect behavior:**
+  In `create_booking`, the validation check allowed bookings up to 300 seconds (5 minutes) in the past (`if start <= now - timedelta(seconds=300):`). This violated Business Rule 2 (`question.md` Section 3), which mandates that the start time must be strictly in the future at request time without any grace window.
+* **How it was fixed:**
+  Changed `if start <= now - timedelta(seconds=300):` to `if start <= now:`.
