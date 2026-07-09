@@ -9,13 +9,13 @@ from ..timeutils import iso_utc
 
 EXPORT_HEADER = [
     "id",
-    "reference_code",
-    "room_id",
-    "user_id",
-    "start_time",
-    "end_time",
+    "reference code",
+    "room id",
+    "user id",
+    "start time",
+    "end time",
     "status",
-    "price_cents",
+    "price cents",
 ]
 
 

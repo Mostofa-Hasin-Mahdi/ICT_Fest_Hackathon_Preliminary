@@ -63,3 +63,11 @@
   In `create_booking`, the validation check allowed bookings up to 300 seconds (5 minutes) in the past (`if start <= now - timedelta(seconds=300):`). This violated Business Rule 2 (`question.md` Section 3), which mandates that the start time must be strictly in the future at request time without any grace window.
 * **How it was fixed:**
   Changed `if start <= now - timedelta(seconds=300):` to `if start <= now:`.
+
+## Bug 9: CSV Header Mismatch
+
+* **File(s) / Line(s):** `app/services/export.py`, lines 10-19
+* **What the bug was and why it caused incorrect behavior:**
+  In `export.py`, the `EXPORT_HEADER` list defined column names using underscores (`"reference_code"`, `"room_id"`, `"user_id"`, `"start_time"`, `"end_time"`, `"price_cents"`). Section 5 of `question.md` specifically mandates exact space-separated column headers (`Export CSV header (exact): id,reference code,room id,user id, start time, end time,status,price cents`). Using underscores causes automated grading checks and integration tests validating exact CSV header format to fail.
+* **How it was fixed:**
+  Replaced all underscored column names in `EXPORT_HEADER` with exact space-separated strings matching the specification (`"reference code"`, `"room id"`, `"user id"`, `"start time"`, `"end time"`, `"price cents"`).
