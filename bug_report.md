@@ -39,3 +39,11 @@
   In `list_bookings`, the SQL offset was computed as `.offset(page * limit)`. Since `page` is 1-indexed (`page=1` by default), requesting the first page computed `1 * 10 = 10`, which skipped the first 10 items (`items 1 to 10`) entirely and caused `page=1` to return `items 11 to 20` or an empty list. Furthermore, line 139 hardcoded `.limit(10)` instead of passing the dynamic `limit` parameter, causing requests with custom limits (e.g., `limit=50`) to still return at most 10 items. This violated Business Rule 11 (`Sequential pages never skip or repeat items... limit 1..100`).
 * **How it was fixed:**
   Changed `.offset(page * limit)` to `.offset((page - 1) * limit)` so `page=1` correctly maps to offset `0`. Changed `.limit(10)` to `.limit(limit)` to dynamically respect the caller's requested limit.
+
+## Bug 6: Duplicate Username Response
+
+* **File(s) / Line(s):** `app/routers/auth.py`, lines 37-43
+* **What the bug was and why it caused incorrect behavior:**
+  In `register`, when a user attempted to register with an existing username inside the same organization, the code checked `if existing is not None:` and returned a dictionary containing the existing user's details with HTTP status `200/201 Created`. This violated Section 5 of `question.md` (`USERNAME TAKEN (409)`), which strictly mandates raising an application error when a username is already taken.
+* **How it was fixed:**
+  Changed the block to `if existing is not None: raise AppError(409, "USERNAME_TAKEN", "Username already taken")`.
