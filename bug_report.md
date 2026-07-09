@@ -111,3 +111,11 @@
   In `next_reference_code`, the function read the counter value (`current = _counter["value"]`), invoked an artificial sleep (`_format_pause()`, `time.sleep(0.12)`), and then incremented and reassigned the counter (`_counter["value"] = current + 1`). Under concurrent load, multiple threads executing `next_reference_code` simultaneously read the exact same `current` value before any thread completed its pause and wrote the incremented value back. Consequently, concurrent booking requests received duplicate reference codes and lost counter increments, violating Business Rule 5 and concurrency consistency requirements (`question.md` Section 3).
 * **How it was fixed:**
   Imported `threading`, instantiated a module-level mutex `_lock = threading.Lock()`, and wrapped the read-pause-increment cycle inside `next_reference_code` within a `with _lock:` block (`app/services/reference.py`) to ensure atomic, sequential reference code issuance under concurrency.
+
+## Bug 15: Race Condition in Rate Limiting
+
+* **File(s) / Line(s):** `app/services/ratelimit.py`, lines 18-26
+* **What the bug was and why it caused incorrect behavior:**
+  In `record_and_check`, the rate limit check retrieved a user's timestamp list (`bucket = _buckets.get(user_id, [])`), trimmed expired timestamps, invoked an artificial sleep (`_settle_pause()`, `time.sleep(0.1)`), appended the new timestamp, and verified `if len(bucket) > _MAX_REQUESTS: raise AppError(429, ...)`. Under concurrent burst requests from a single user, multiple threads read the exact same `bucket` state simultaneously before any thread finished `_settle_pause()` and wrote back to `_buckets`. Each thread checked `len(bucket)` against only its own single-item local list (`len(bucket) == 1`), causing `len(bucket) > 20` to never evaluate to `True`. This allowed concurrent requests to completely bypass the `20 requests per 60 seconds` rate limit, violating Business Rule 4 and concurrency constraints (`question.md` Section 3).
+* **How it was fixed:**
+  Imported `threading`, instantiated a module-level mutex `_lock = threading.Lock()`, and wrapped the entire read-pause-append-check sequence inside `record_and_check` within a `with _lock:` block (`app/services/ratelimit.py`) to ensure atomic, accurate rate limit accounting across concurrent requests.
