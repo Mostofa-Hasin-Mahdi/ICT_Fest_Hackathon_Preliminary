@@ -79,3 +79,11 @@
   In `get_token_payload`, the code checked whether a token was revoked by looking up the user ID (`payload.get("sub")`) inside the `_revoked_tokens` set (`if payload.get("sub") in _revoked_tokens:`). However, `revoke_access_token` correctly stores `payload["jti"]` (the unique token UUID string) inside `_revoked_tokens` upon logout. Because the check compared the user ID (`"sub"`) against a set containing token UUIDs (`"jti"`), it always evaluated to `False`. Consequently, logged-out access tokens were never rejected and could make API requests indefinitely after `POST /auth/logout`, violating Business Rule 8 (`question.md` Section 3).
 * **How it was fixed:**
   Changed `if payload.get("sub") in _revoked_tokens:` to `if payload.get("jti") in _revoked_tokens:` inside `get_token_payload` (`app/auth.py`).
+
+## Bug 11: Refresh Token Single-Use Violation
+
+* **File(s) / Line(s):** `app/routers/auth.py`, lines 76-88
+* **What the bug was and why it caused incorrect behavior:**
+  In `refresh`, when a client presented a valid refresh token (`POST /auth/refresh`), the endpoint issued a new access and refresh token pair without verifying whether the presented refresh token had already been revoked, and without adding the presented refresh token (`data["jti"]`) to `_revoked_tokens`. This allowed infinite reuse of a single refresh token, directly violating Business Rule 8 (`question.md` Section 3) which mandates that refresh tokens are single use (`exchanging a refresh token returns a new pair and invalidates the presented refresh token... reuse -> 401`).
+* **How it was fixed:**
+  Imported `_revoked_tokens` from `..auth` into `app/routers/auth.py`, added a check `if data.get("jti") in _revoked_tokens: raise AppError(401, "UNAUTHORIZED", "Refresh token has been revoked")` upon entry, and called `revoke_access_token(data)` before returning the new token pair.
