@@ -135,3 +135,14 @@
   In `log_refund`, the amount written to the database `RefundLog` ledger was calculated by converting `price_cents` to floating-point dollars (`booking.price_cents / 100.0`), multiplying by the refund percentage (`* (percent / 100.0)`), multiplying by `100`, and then truncating the fractional result using `int()`. Meanwhile, `cancel_booking` (`app/routers/bookings.py`) computed the API response refund amount using exact nearest-integer rounding (`round(booking.price_cents * (percent / 100.0))`). For bookings with odd or non-even cents (e.g., `2999 cents` at `50%`), `int()` truncated `1499.5` to `1499 cents` while `round()` evaluated to `1500 cents`. Consequently, the financial refund ledger (`RefundLog`) recorded different refund amounts than those returned in the cancellation API responses, causing accounting discrepancies and violating Business Rule 7 (`question.md` Section 3).
 * **How it was fixed:**
   Replaced the floating-point conversion and integer truncation logic in `log_refund` (`app/services/refunds.py`) with `amount_cents = round(booking.price_cents * (percent / 100.0))`, ensuring 100% exact numerical agreement between database ledger records and API cancellation responses.
+
+## Bug 18: Booking Creation, Quota, and Cancellation Race Conditions
+
+* **File(s) / Line(s):** `app/routers/bookings.py`, lines 75-128 and 180-228
+* **What the bug was and why it caused incorrect behavior:**
+  In `create_booking` and `cancel_booking`, critical business logic validations (`_has_conflict` room availability checks, `_check_quota` user/org daily booking limits, and `if booking.status == "cancelled"` checks) were executed asynchronously across several intentional delays (`_pricing_warmup()`, `_quota_audit()`, and `_settlement_pause()`) without mutex synchronization or transactional serializability. Under concurrent requests:
+  1. Two threads checking `_has_conflict` for the same room interval simultaneously read `False` during `_pricing_warmup()`, committing overlapping reservations (double-bookings; violating Business Rule 1).
+  2. Two threads checking `_check_quota` for a user at `count == 2` read `2 <= 3` during `_quota_audit()`, committing both requests and allowing 4 active bookings (violating Business Rule 4).
+  3. Two threads cancelling the same booking passed the cancellation status check during `_settlement_pause()`, inserting duplicate records into `RefundLog` (violating Business Rule 6).
+* **How it was fixed:**
+  Imported `threading`, instantiated a module-level mutex `_booking_lock = threading.Lock()`, and wrapped the entire bodies of `create_booking` and `cancel_booking` inside `with _booking_lock:` blocks (`app/routers/bookings.py`). This guarantees serial, atomic execution of all conflict detection, quota verification, reservation insertions, and cancellation ledger writes across concurrent requests.
