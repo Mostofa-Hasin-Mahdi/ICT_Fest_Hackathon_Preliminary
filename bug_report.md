@@ -23,3 +23,19 @@
   The `create_access_token` function calculated the token `lifetime` as `timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES * 60)`. Since `ACCESS_TOKEN_EXPIRE_MINUTES` is defined as 15 in `config.py`, this evaluated to 900 minutes instead of the intended 900 seconds (15 minutes). This violated Business Rule 8, which dictates that access tokens must expire in exactly 900 seconds.
 * **How it was fixed:**
   Removed the `* 60` multiplier so the parameter matches the minutes unit, changing `timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES * 60)` to `timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)`.
+
+## Bug 4: Booking Sort Order
+
+* **File(s) / Line(s):** `app/routers/bookings.py`, line 137
+* **What the bug was and why it caused incorrect behavior:**
+  In `list_bookings`, the query sorted bookings in descending order of their start time (`Booking.start_time.desc()`). This violated Business Rule 11 (`question.md` Section 4), which mandates that the caller's bookings must be sorted ascending by start time (`ties by ascending id`).
+* **How it was fixed:**
+  Changed `Booking.start_time.desc()` to `Booking.start_time.asc()`.
+
+## Bug 5: Pagination 1-Based Offset & Hardcoded Limit
+
+* **File(s) / Line(s):** `app/routers/bookings.py`, lines 138-139
+* **What the bug was and why it caused incorrect behavior:**
+  In `list_bookings`, the SQL offset was computed as `.offset(page * limit)`. Since `page` is 1-indexed (`page=1` by default), requesting the first page computed `1 * 10 = 10`, which skipped the first 10 items (`items 1 to 10`) entirely and caused `page=1` to return `items 11 to 20` or an empty list. Furthermore, line 139 hardcoded `.limit(10)` instead of passing the dynamic `limit` parameter, causing requests with custom limits (e.g., `limit=50`) to still return at most 10 items. This violated Business Rule 11 (`Sequential pages never skip or repeat items... limit 1..100`).
+* **How it was fixed:**
+  Changed `.offset(page * limit)` to `.offset((page - 1) * limit)` so `page=1` correctly maps to offset `0`. Changed `.limit(10)` to `.limit(limit)` to dynamically respect the caller's requested limit.
