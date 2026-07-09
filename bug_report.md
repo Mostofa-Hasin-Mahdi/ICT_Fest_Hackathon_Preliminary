@@ -15,3 +15,11 @@
   In `_has_conflict`, the overlap check condition used inclusive inequality `b.start_time <= end and start <= b.end_time`. When a user attempted to book a room back-to-back right after another booking finished (for example, existing booking ends at `12:00` and new booking starts at `12:00`), `start <= b.end_time` evaluated to `12:00 <= 12:00`, which is `True`. This caused valid back-to-back bookings to be wrongly rejected with a `409 ROOM CONFLICT` error, violating Business Rule 3 (`existing.start < new.end AND new.start < existing.end. Back-to-back bookings are allowed`).
 * **How it was fixed:**
   Changed `b.start_time <= end and start <= b.end_time` to `b.start_time < end and start < b.end_time`. Strict inequality ensures that back-to-back bookings where `new.start == existing.end` do not trigger false conflicts.
+
+## Bug 3: Access Token Expiry Duration Multiplier
+
+* **File(s) / Line(s):** `app/auth.py`, line 50
+* **What the bug was and why it caused incorrect behavior:**
+  The `create_access_token` function calculated the token `lifetime` as `timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES * 60)`. Since `ACCESS_TOKEN_EXPIRE_MINUTES` is defined as 15 in `config.py`, this evaluated to 900 minutes instead of the intended 900 seconds (15 minutes). This violated Business Rule 8, which dictates that access tokens must expire in exactly 900 seconds.
+* **How it was fixed:**
+  Removed the `* 60` multiplier so the parameter matches the minutes unit, changing `timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES * 60)` to `timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)`.
